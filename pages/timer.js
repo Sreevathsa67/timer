@@ -17,13 +17,41 @@ export default function Timer() {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Ambient particle canvas
+  // Ambient particle + fire ring canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let W = canvas.width = window.innerWidth;
     let H = canvas.height = window.innerHeight;
+    let mouseX = W / 2;
+    let mouseY = H / 2;
+
+    const rings = [
+      { r: Math.min(W, H) * 0.32, count: 120, speed: 0.004, offset: 0 },
+      { r: Math.min(W, H) * 0.26, count: 90, speed: -0.006, offset: 1.2 },
+      { r: Math.min(W, H) * 0.20, count: 60, speed: 0.009, offset: 2.4 },
+    ];
+
+    const ringParticles = [];
+    rings.forEach((ring, ri) => {
+      for (let i = 0; i < ring.count; i++) {
+        const angle = (i / ring.count) * Math.PI * 2 + ring.offset;
+        ringParticles.push({
+          ring: ri,
+          angle,
+          r: ring.r,
+          speed: ring.speed * (0.8 + Math.random() * 0.4),
+          size: 1.4 + Math.random() * 2.6,
+          life: Math.random(),
+          lifeSpeed: 0.008 + Math.random() * 0.014,
+          flicker: Math.random() * Math.PI * 2,
+          flickerSpeed: 0.05 + Math.random() * 0.1,
+          drift: (Math.random() - 0.5) * 18,
+          tailLength: 3 + Math.random() * 8,
+        });
+      }
+    });
 
     const particles = Array.from({ length: 120 }, () => ({
       x: Math.random() * W,
@@ -40,6 +68,63 @@ export default function Timer() {
     let raf;
     function draw() {
       ctx.clearRect(0, 0, W, H);
+      const cx = W / 2 + (mouseX - W / 2) * 0.05;
+      const cy = H / 2 + (mouseY - H / 2) * 0.04;
+
+      rings.forEach((ring, ri) => {
+        const alpha = [0.06, 0.04, 0.03][ri];
+        const gradient = ctx.createRadialGradient(cx, cy, ring.r - 30, cx, cy, ring.r + 30);
+        gradient.addColorStop(0, `rgba(255,100,0,0)`);
+        gradient.addColorStop(0.4, `rgba(255,80,0,${alpha})`);
+        gradient.addColorStop(0.6, `rgba(255,140,0,${alpha * 1.5})`);
+        gradient.addColorStop(1, `rgba(255,60,0,0)`);
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 60;
+        ctx.stroke();
+      });
+
+      ringParticles.forEach(p => {
+        p.angle += p.speed;
+        p.life += p.lifeSpeed;
+        p.flicker += p.flickerSpeed;
+        if (p.life > 1) p.life = 0;
+
+        const flickerVal = Math.sin(p.flicker) * 0.5 + 0.5;
+        const rOffset = p.drift * Math.sin(p.life * Math.PI);
+        const currentR = p.r + rOffset;
+        const x = cx + Math.cos(p.angle) * currentR;
+        const y = cy + Math.sin(p.angle) * currentR;
+
+        const lifeCurve = Math.sin(p.life * Math.PI);
+        const alpha = lifeCurve * (0.6 + flickerVal * 0.4);
+        const temp = lifeCurve;
+        const g = Math.floor(temp > 0.7 ? 220 : temp > 0.4 ? 120 + (temp - 0.4) * 333 : temp * 300);
+        const b = Math.floor(temp > 0.8 ? 100 * (temp - 0.8) * 5 : 0);
+
+        const tailAngle = p.angle - p.speed * p.tailLength * 15;
+        const tx = cx + Math.cos(tailAngle) * currentR;
+        const ty = cy + Math.sin(tailAngle) * currentR;
+
+        const grad = ctx.createLinearGradient(tx, ty, x, y);
+        grad.addColorStop(0, `rgba(255,${Math.floor(g * 0.3)},0,0)`);
+        grad.addColorStop(1, `rgba(255,${g},${b},${alpha})`);
+
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = p.size * lifeCurve;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, y, p.size * lifeCurve * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,${Math.min(255, g + 80)},${b + 40},${alpha * 0.9})`;
+        ctx.fill();
+      });
+
       particles.forEach(p => {
         p.x += p.vx; p.y += p.vy; p.life += p.lifeSpeed;
         if (p.y < -10 || p.life > 1) {
@@ -51,12 +136,20 @@ export default function Timer() {
         ctx.fillStyle = p.color === 'gold' ? `rgba(255,180,40,${a})` : `rgba(255,255,255,${a * 0.5})`;
         ctx.fill();
       });
+
       raf = requestAnimationFrame(draw);
     }
     draw();
+
     const onResize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+    const onMouseMove = e => { mouseX = e.clientX; mouseY = e.clientY; };
     window.addEventListener('resize', onResize);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
+    window.addEventListener('mousemove', onMouseMove);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('mousemove', onMouseMove);
+    };
   }, []);
 
   useEffect(() => {
