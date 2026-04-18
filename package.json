@@ -2,7 +2,7 @@
   "name": "crisis-timer",
   "version": "1.0.0",
   "description": "Timer with custom background and crisis mode",
-  "main": "pages/index.js",
+  "main": "pages/welcome.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
